@@ -1,4 +1,4 @@
-# 🚢 Stranger Naval Ships
+# 🚢 Stranger Ships
 
 Jogo de Batalha Naval temático inspirado em Stranger Things - Implementação em Python com arquitetura MVC.
 
