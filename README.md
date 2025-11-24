@@ -54,7 +54,7 @@ cp .env.example .env
 
 #### 4. Iniciar o banco de dados
 
-**Apenas se quiser usar ranking online:**
+**Necessário para usar ranking online:**
 
 ```bash
 docker compose up -d
@@ -91,13 +91,6 @@ uv run src/main.py
 - **TAB**: Alternar campos de entrada (login)
 - **ENTER**: Confirmar ação
 - **ESC**: Voltar/Sair
-
-## 📝 Comandos Disponíveis
-
-```bash
-uv run src/main.py          # Inicia o jogo
-uv run scripts/test_mongodb.py    # Testa conexão com MongoDB
-```
 
 ## 🗄️ Banco de Dados
 
