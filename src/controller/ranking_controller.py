@@ -79,7 +79,6 @@ class RankingController:
     def clear_rankings(self) -> bool:
         return self._repo.clear_all()
 
-    # Lógica interna de pontuação (mantida compatível com controlador antigo)
     def _calculate_score(
         self, won: bool, turns: int, ships_remaining: int, accuracy: float
     ) -> int:
