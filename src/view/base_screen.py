@@ -5,89 +5,135 @@ import pygame
 
 class BaseScreen(ABC):
     def __init__(self, title: str = "Stranger Naval Ships"):
-        """Initialize base screen with common attributes.
+        """Inicializa tela base com atributos comuns.
 
         Args:
-            width: Screen width in pixels (default: 1400)
-            height: Screen height in pixels (default: 700)
-            title: Window title (default: "Stranger Naval Ships")
+            width: Largura da tela em pixels (padrão: 1400)
+            height: Altura da tela em pixels (padrão: 700)
+            title: Título da janela (padrão: "Stranger Naval Ships")
         """
-        self.width = 1400
-        self.height = 900
-        self.screen = pygame.display.set_mode((self.width, self.height))
-        self.clock = pygame.time.Clock()
+        self._width = 1400
+        self._height = 900
+        self._screen = pygame.display.set_mode((self._width, self._height))
+        self._clock = pygame.time.Clock()
         pygame.display.set_caption(title)
+
+        # Carrega fundo animado (comum a todas as telas)
+        self._bg_surfaces = []
+        self._bg_index = 0
+        self._bg_last_switch = pygame.time.get_ticks()
+        self._bg_switch_interval = 500
+
+        try:
+            bg_off = pygame.image.load("src/assets/home_screen_bg/off.png")
+            bg_on = pygame.image.load("src/assets/home_screen_bg/on.png")
+            bg_off = pygame.transform.scale(bg_off, (self._width, self._height))
+            bg_on = pygame.transform.scale(bg_on, (self._width, self._height))
+            self._bg_surfaces = [bg_off, bg_on]
+        except Exception as e:
+            print(f"Aviso: Não foi possível carregar imagens de fundo: {e}")
+            # Cria gradiente como fallback
+            grad = pygame.Surface((self._width, self._height))
+            for y in range(self._height):
+                t = y / max(1, self._height - 1)
+                r = int(6 + (20 - 6) * t)
+                g = int(12 + (50 - 12) * t)
+                b = int(30 + (90 - 30) * t)
+                pygame.draw.line(grad, (r, g, b), (0, y), (self._width, y))
+            self._bg_surfaces = [grad]
 
     @abstractmethod
     def draw(self) -> None:
-        """Draw the screen content. Must be implemented by all subclasses.
+        """Desenha o conteúdo da tela. Deve ser implementado por todas as subclasses.
 
-        This method should handle all rendering logic for the screen.
-        Should end with pygame.display.flip() to update the display.
+        Este método deve lidar com toda a lógica de renderização da tela.
+        Deve terminar com pygame.display.flip() para atualizar o display.
         """
         pass
 
     def update(self) -> None:
-        """Update screen state (optional, called every frame).
-
-        Override this method to add per-frame logic like animations,
-        timers, or state updates that don't depend on events.
-        """
-        pass
+        """Atualiza estado da tela (opcional, chamado a cada frame). """
+        if len(self._bg_surfaces) > 1:
+            current_time = pygame.time.get_ticks()
+            if current_time - self._bg_last_switch >= self._bg_switch_interval:
+                self._bg_index = (self._bg_index + 1) % len(self._bg_surfaces)
+                self._bg_last_switch = current_time
 
     def handle_event(self, event: pygame.event.Event):
-        """Handle pygame events (optional).
+        """Trata eventos do pygame (opcional).
 
-        Override this to handle keyboard, mouse, or other events.
-        Return a screen name (str) to navigate to another screen,
-        or a tuple (screen_name, data) to pass data to next screen.
+        Retorna um nome de tela (str) para navegar para outra tela,
+        ou uma tupla (screen_name, data) para passar dados para próxima tela.
 
         Args:
-            event: Pygame event object
+            event: Objeto de evento Pygame
 
         Returns:
-            str | tuple | None: Screen name to navigate to, tuple with data, or None
+            str | tuple | None: Nome da tela para navegar, tupla com dados, ou None
         """
-        # Default behavior: delegate left-click to check_click
+        # Comportamento padrão: delega clique esquerdo para check_click
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             return self.check_click(event.pos)
         return None
 
     def check_click(self, pos: tuple[int, int]):
-        """Handle mouse clicks at given position (optional).
-
-        Override this for simple click handling. For more complex event
-        handling (right-click, keyboard), override handle_event instead.
-
+        """Trata cliques do mouse na posição dada (opcional).
         Args:
-            pos: Tuple of (x, y) mouse position
+            pos: Tupla de posição (x, y) do mouse
 
         Returns:
-            str | tuple | None: Screen name to navigate to, tuple with data, or None
+            str | tuple | None: Nome da tela para navegar, tupla com dados, ou None
         """
         return None
 
     def get_center_pos(self, width: int, height: int) -> tuple[int, int]:
-        """Calculate position to center an element on screen.
+        """Calcula posição para centralizar um elemento na tela.
 
         Args:
-            width: Element width
-            height: Element height
+            width: Largura do elemento
+            height: Altura do elemento
 
         Returns:
-            Tuple of (x, y) position to center the element
+            Tupla de posição (x, y) para centralizar o elemento
         """
-        x = (self.width - width) // 2
-        y = (self.height - height) // 2
+        x = (self._width - width) // 2
+        y = (self._height - height) // 2
         return (x, y)
 
     def is_mouse_over(self, rect: pygame.Rect) -> bool:
-        """Check if mouse is currently over a rectangle.
+        """Verifica se o mouse está sobre um retângulo.
 
         Args:
-            rect: Rectangle to check
+            rect: Retângulo para verificar
 
         Returns:
-            True if mouse is over the rectangle
+            True se o mouse está sobre o retângulo
         """
         return rect.collidepoint(pygame.mouse.get_pos())
+
+    def draw_background(self) -> None:
+        """Desenha o fundo animado."""
+        if self._bg_surfaces:
+            self._screen.blit(self._bg_surfaces[self._bg_index], (0, 0))
+        else:
+            self._screen.fill((0, 0, 0))
+
+    @property
+    def width(self) -> int:
+        """Obtém largura da tela."""
+        return self._width
+
+    @property
+    def height(self) -> int:
+        """Obtém altura da tela."""
+        return self._height
+
+    @property
+    def screen(self) -> pygame.Surface:
+        """Obtém surface da tela do pygame."""
+        return self._screen
+
+    @property
+    def clock(self) -> pygame.time.Clock:
+        """Obtém relógio do pygame."""
+        return self._clock

@@ -17,23 +17,23 @@ class PlayController:
         Args:
             player: Jogador humano (opcional). Se None, cria um novo jogador.
         """
-        # Initialize players
+        # Inicializa jogadores
         if player:
-            self.player = player
+            self._player = player
         else:
-            self.player = CommonPlayer("You")
-            self.player.place_ships()
+            self._player = CommonPlayer("Você")
+            self._player.place_ships()
 
-        self.computer = SystemPlayer("Computer")
-        self.computer.place_ships()  # Always place computer's ships
+        self._computer = SystemPlayer("Computador")
+        self._computer.place_ships()  # Sempre posiciona navios do computador
 
-        # Initialize match
-        self.match = Match(self.player, self.computer)
-        self.match.start()
+        # Inicializa partida
+        self._match = Match(self._player, self._computer)
+        self._match.start()
 
-        # Game state
-        self.finished = False
-        self.winner = None
+        # Estado do jogo
+        self._finished = False
+        self._winner = None
 
     def process_player_attack(
         self, row: int, col: int
@@ -52,110 +52,130 @@ class PlayController:
             - jogo_acabou: True se o jogo acabou
             - mensagem: Mensagem descritiva do resultado
         """
-        if self.finished:
-            return ("already_attacked", False, True, "The game is already over!")
+        if self._finished:
+            return ("already_attacked", False, True, "O jogo já acabou!")
 
-        result, ship_destroyed, game_over = self.match.process_turn(row, col)
+        result, ship_destroyed, game_over = self._match.process_turn(row, col)
 
-        # Generate message
+        # Gera mensagem
         if result == "already_attacked":
-            message = "You already attacked this position!"
+            message = "Você já atacou esta posição!"
         elif result == "hit":
             if ship_destroyed:
-                message = "HIT and DESTROYED an enemy ship!"
+                message = "ACERTOU e DESTRUIU um navio inimigo!"
             else:
-                message = "HIT! Keep attacking!"
+                message = "ACERTOU! Continue atacando!"
         else:
-            message = "WATER! You missed..."
+            message = "ÁGUA! Você errou..."
 
         if game_over:
-            self.finished = True
-            self.winner = self.player
-            message = "🎉 YOU WON! Destroyed all enemy ships!"
+            self._finished = True
+            self._winner = self._player
+            message = "VOCÊ VENCEU! Destruiu todos os navios inimigos!"
 
         return (result, ship_destroyed, game_over, message)
 
     def process_computer_attack(self) -> Tuple[str, bool, bool, Optional[str]]:
         """
-        Processes a computer attack.
+        Processa um ataque do computador.
 
         Returns:
-            Tuple with (result, ship_destroyed, game_over, message)
+            Tupla com (resultado, navio_destruído, jogo_acabou, mensagem)
         """
-        if self.finished:
-            return ("already_attacked", False, True, "The game is already over!")
+        if self._finished:
+            return ("already_attacked", False, True, "O jogo já acabou!")
 
-        attack = self.computer.make_attack()
+        attack = self._computer.make_attack()
         if not attack:
-            return ("water", False, False, "Computer couldn't attack!")
+            return ("water", False, False, "Computador não conseguiu atacar!")
 
         row, col = attack
-        result, ship_destroyed, game_over = self.match.process_turn(row, col)
+        result, ship_destroyed, game_over = self._match.process_turn(row, col)
 
-        # Record result so the computer can learn
-        self.computer.record_attack_result((row, col), result, ship_destroyed)
+        # Registra resultado para o computador aprender
+        self._computer.record_attack_result((row, col), result, ship_destroyed)
 
-        # Generate message
+        # Gera mensagem
         if result == "hit":
             if ship_destroyed:
-                message = f"💥 Enemy HIT ({row},{col}) and DESTROYED your ship!"
+                message = f"Inimigo ACERTOU ({row},{col}) e DESTRUIU seu navio!"
             else:
-                message = f"💥 Enemy HIT ({row},{col})!"
+                message = f"Inimigo ACERTOU ({row},{col})!"
         else:
-            message = f"Enemy missed at ({row},{col}). Your turn!"
+            message = f"Inimigo errou em ({row},{col}). Sua vez!"
 
         if game_over:
-            self.finished = True
-            self.winner = self.computer
-            message = "😢 YOU LOST! The enemy destroyed all your ships!"
+            self._finished = True
+            self._winner = self._computer
+            message = "VOCÊ PERDEU! O inimigo destruiu todos os seus navios!"
 
         return (result, ship_destroyed, game_over, message)
 
     def switch_turn(self):
-        """Switches turn between players"""
-        self.match.switch_player()
+        """Alterna turno entre jogadores"""
+        self._match.switch_player()
 
     def is_player_turn(self) -> bool:
-        """Checks if it's the player's turn"""
-        return self.match.current_player == self.player
+        """Verifica se é o turno do jogador"""
+        return self._match.current_player == self._player
 
     def get_game_status(self) -> dict:
         """
-        Returns information about the current game state.
+        Retorna informações sobre o estado atual do jogo.
 
         Returns:
-            Dictionary with match statistics
+            Dicionário com estatísticas da partida
         """
         player_ships = [
-            ship for ship in self.player.board.ships if not ship.is_destroyed()
+            ship for ship in self._player.board.ships if not ship.is_destroyed()
         ]
         computer_ships = [
-            ship for ship in self.computer.board.ships if not ship.is_destroyed()
+            ship for ship in self._computer.board.ships if not ship.is_destroyed()
         ]
 
         return {
-            "turn": self.match.turn,
-            "current_player": self.match.current_player.name,
+            "turn": self._match.turn,
+            "current_player": self._match.current_player.name,
             "player_ships_remaining": len(player_ships),
-            "player_ships_total": len(self.player.board.ships),
+            "player_ships_total": len(self._player.board.ships),
             "computer_ships_remaining": len(computer_ships),
-            "computer_ships_total": len(self.computer.board.ships),
-            "finished": self.finished,
-            "winner": self.winner.name if self.winner else None,
+            "computer_ships_total": len(self._computer.board.ships),
+            "finished": self._finished,
+            "winner": self._winner.name if self._winner else None,
         }
 
     def is_valid_attack_position(self, row: int, col: int) -> bool:
         """
-        Checks if a position is valid for attack.
+        Verifica se uma posição é válida para ataque.
 
         Args:
-            row: Row (0-9)
-            col: Column (0-9)
+            row: Linha (0-9)
+            col: Coluna (0-9)
 
         Returns:
-            True if the position is valid and hasn't been attacked yet
+            True se a posição é válida e ainda não foi atacada
         """
         if row < 0 or row >= 10 or col < 0 or col >= 10:
             return False
 
-        return (row, col) not in self.computer.board.attacks
+        return (row, col) not in self._computer.board.attacks
+
+    @property
+    def player(self) -> CommonPlayer:
+        """Retorna o jogador."""
+        return self._player
+
+    @property
+    def computer(self) -> SystemPlayer:
+        """Retorna o computador."""
+        return self._computer
+
+    @property
+    def finished(self) -> bool:
+        """Verifica se o jogo terminou."""
+        return self._finished
+
+    @property
+    def winner(self):
+        """Retorna o vencedor."""
+        return self._winner

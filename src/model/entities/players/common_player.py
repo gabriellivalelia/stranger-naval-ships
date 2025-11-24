@@ -1,7 +1,15 @@
 """CommonPlayer - Human player"""
 
+import random
+
 from model.entities.player import Player
-from model.entities.ship import Ship
+from model.entities.ships import (
+    ArgylesVanShip,
+    ChristmasShip,
+    DemogorgonShip,
+    LaboratoryShip,
+    ScoopsAhoyShip,
+)
 
 
 class CommonPlayer(Player):
@@ -12,36 +20,42 @@ class CommonPlayer(Player):
 
     def place_ships(self):
         """
-        Places the player's ships on the board.
-        Simplified version with automatic placement.
+        Posiciona os navios do jogador no tabuleiro aleatoriamente.
+        Usa posicionamento automático aleatório para navios temáticos.
         """
         default_ships = [
-            ("Carrier", 5),
-            ("Battleship", 4),
-            ("Cruiser", 3),
-            ("Submarine", 3),
-            ("Destroyer", 2),
+            DemogorgonShip(),  # 5 células
+            ScoopsAhoyShip(),  # 4 células
+            ChristmasShip(),  # 3 células
+            ArgylesVanShip(),  # 3 células
+            LaboratoryShip(),  # 2 células
         ]
 
-        # Fixed positioning to simplify
-        positions = [
-            (0, 0, True),  # Carrier: horizontal row 0
-            (2, 0, True),  # Battleship: horizontal row 2
-            (4, 0, True),  # Cruiser: horizontal row 4
-            (6, 0, True),  # Submarine: horizontal row 6
-            (8, 0, True),  # Destroyer: horizontal row 8
-        ]
+        # Random positioning
+        for ship in default_ships:
+            placed = False
+            attempts = 0
+            max_attempts = 100
 
-        for (name, size), (row, col, horizontal) in zip(default_ships, positions):
-            ship = Ship(name, size)
-            try:
-                self.board.add_ship(ship, row, col, horizontal)
-            except ValueError as e:
-                print(f"Error placing {name}: {e}")
+            while not placed and attempts < max_attempts:
+                row = random.randint(0, self._board.size - 1)
+                col = random.randint(0, self._board.size - 1)
+                horizontal = random.choice([True, False])
+
+                try:
+                    self._board.add_ship(ship, row, col, horizontal)
+                    placed = True
+                except ValueError:
+                    attempts += 1
+
+            if not placed:
+                print(
+                    f"Aviso: Não foi possível posicionar {ship.name} após {max_attempts} tentativas"
+                )
 
     def make_attack(self):
         """
-        Human player doesn't make automatic attacks.
-        Attack is made through the interface.
+        Jogador humano não faz ataques automáticos.
+        Ataque é feito através da interface.
         """
         pass

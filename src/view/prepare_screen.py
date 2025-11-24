@@ -1,248 +1,432 @@
 import pygame
 
 from model.entities.players.common_player import CommonPlayer
-from model.entities.ship import Ship
+from model.entities.ships import (
+    ArgylesVanShip,
+    ChristmasShip,
+    DemogorgonShip,
+    LaboratoryShip,
+    ScoopsAhoyShip,
+)
 from view.base_screen import BaseScreen
 
 
 class PrepareScreen(BaseScreen):
-    """Screen to let the player place ships before the match starts.
+    """Tela para o jogador posicionar navios antes da partida começar.
 
-    Controls:
-    - Left click on player's grid: try place current ship at clicked cell
-    - Right click or press 'r': toggle orientation (horizontal/vertical)
-    - 'Randomize' button: auto-place ships (uses CommonPlayer.colocar_navios)
-    - 'Start' button: available when all ships placed, returns "play"
-    - 'Back' button: returns "home"
+    Controles:
+    - Clique esquerdo na grade do jogador: tenta posicionar navio atual na célula clicada
+    - Clique direito ou tecla 'r': alterna orientação (horizontal/vertical)
+    - Botão 'Aleatorizar': posiciona navios automaticamente (usa CommonPlayer.colocar_navios)
+    - Botão 'Iniciar': disponível quando todos os navios estão posicionados, retorna "play"
+    - Botão 'Voltar': retorna "home"
     """
 
     def __init__(self):
         super().__init__("Prepare - Posicionar Navios")
 
         # board drawing config
-        self.cell_size = 40
-        self.offset_x = 50
-        self.offset_y = 80
-        self.board_size = 10
+        self._cell_size = 50
+        self._offset_x = 100
+        self._offset_y = 150
+        self._board_size = 10
 
         # player model
-        self.player = CommonPlayer("Você")
+        self._player = CommonPlayer("Você")
 
-        # ships to place (name, size) - same as CommonPlayer default
-        self.ships_to_place = [
-            ("Porta-Aviões", 5),
-            ("Encouraçado", 4),
-            ("Cruzador", 3),
-            ("Submarino", 3),
-            ("Destroyer", 2),
+        # ships to place - using themed ship classes
+        self._ships_to_place = [
+            DemogorgonShip(),  # 5 cells
+            ScoopsAhoyShip(),  # 4 cells
+            ChristmasShip(),  # 3 cells
+            ArgylesVanShip(),  # 3 cells
+            LaboratoryShip(),  # 2 cells
         ]
-        self.current_index = 0
-        self.horizontal = True
+        self._current_index = 0
+        self._horizontal = True
 
         # Track key state to avoid repeated toggles
-        self.r_key_pressed = False
-        self.last_toggle_time = 0
-        self.toggle_cooldown = 300  # milliseconds between toggles
+        self._r_key_pressed = False
+        self._last_toggle_time = 0
+        self._toggle_cooldown = 300  # milliseconds between toggles
 
         # UI
-        self.message = "Click on the board to place the current ship"
-        self.buttons = {
-            "randomize": pygame.Rect(self.width - 220, 100, 200, 40),
-            "start": pygame.Rect(self.width - 220, 160, 200, 40),
-            "back": pygame.Rect(self.width - 220, 220, 200, 40),
-        }
+        self._message = "Clique no tabuleiro para posicionar o navio"
+        self._create_buttons()
+
+        # Load click sound
+        self._click_sound = None
+        try:
+            self._click_sound = pygame.mixer.Sound("src/assets/sounds/click.mp3")
+            self._click_sound.set_volume(0.5)
+        except Exception as e:
+            print(f"Não foi possível carregar som de clique: {e}")
+
+        # Load put sound (for placing ships)
+        self._put_sound = None
+        try:
+            self._put_sound = pygame.mixer.Sound("src/assets/sounds/put.mp3")
+            self._put_sound.set_volume(0.6)
+        except Exception as e:
+            print(f"Não foi possível carregar som de posicionamento: {e}")
+
+    def _create_buttons(self):
+        """Cria botões estilizados"""
+        button_width = 220
+        button_height = 60
+        button_x = self._width - button_width - 100
+
+        self._buttons = [
+            {
+                "text": "Aleatorizar",
+                "rect": pygame.Rect(button_x, 250, button_width, button_height),
+                "color": (100, 100, 200),
+                "hover_color": (150, 150, 255),
+                "action": "randomize",
+            },
+            {
+                "text": "Iniciar",
+                "rect": pygame.Rect(button_x, 330, button_width, button_height),
+                "color": (50, 150, 50),
+                "hover_color": (100, 200, 100),
+                "action": "start",
+                "enabled_check": True,
+            },
+            {
+                "text": "Voltar",
+                "rect": pygame.Rect(button_x, 410, button_width, button_height),
+                "color": (139, 0, 0),
+                "hover_color": (200, 0, 0),
+                "action": "back",
+            },
+        ]
+
+    def update(self):
+        """Atualiza animação de fundo e trata teclado"""
+        # Update base screen (background animation)
+        super().update()
+
+        # Handle orientation toggle via keyboard (with debouncing)
+        pressed = pygame.key.get_pressed()
+        if pressed[pygame.K_r]:
+            if not self._r_key_pressed:
+                self._horizontal = not self._horizontal
+                self._r_key_pressed = True
+        else:
+            self._r_key_pressed = False
 
     def draw(self):
-        # background
-        self.screen.fill((20, 30, 50))
+        # Draw animated background
+        self.draw_background()
 
-        # draw player's board
-        font = pygame.font.Font(None, 28)
-        title = font.render("Posicione seus navios", True, (255, 255, 255))
-        self.screen.blit(title, (self.offset_x, 20))
+        # Title with shadow
+        title_font = pygame.font.Font(None, 70)
+        title_text = "POSICIONE SEUS NAVIOS"
 
-        for row in range(self.board_size):
-            for col in range(self.board_size):
-                x = self.offset_x + col * self.cell_size
-                y = self.offset_y + row * self.cell_size
-                rect = pygame.Rect(x, y, self.cell_size, self.cell_size)
-                cell = self.player.board.grid[row][col]
+        # Shadow
+        shadow = title_font.render(title_text, True, (0, 0, 0))
+        shadow_x = self._width // 2 - shadow.get_width() // 2 + 3
+        self._screen.blit(shadow, (shadow_x, 53))
+
+        # Title
+        title = title_font.render(title_text, True, (255, 215, 0))
+        title_x = self._width // 2 - title.get_width() // 2
+        self._screen.blit(title, (title_x, 50))
+
+        # Draw board background
+        board_bg = pygame.Rect(
+            self._offset_x - 10,
+            self._offset_y - 10,
+            self._board_size * self._cell_size + 20,
+            self._board_size * self._cell_size + 20,
+        )
+        bg_surface = pygame.Surface((board_bg.width, board_bg.height), pygame.SRCALPHA)
+        bg_surface.fill((0, 0, 0, 180))
+        self._screen.blit(bg_surface, (board_bg.x, board_bg.y))
+        pygame.draw.rect(self._screen, (139, 0, 0), board_bg, 4, border_radius=10)
+
+        # Draw board grid
+        for row in range(self._board_size):
+            for col in range(self._board_size):
+                x = self._offset_x + col * self._cell_size
+                y = self._offset_y + row * self._cell_size
+                rect = pygame.Rect(x, y, self._cell_size, self._cell_size)
+                cell = self._player.board.grid[row][col]
                 if cell == "~":
-                    color = (0, 119, 190)
+                    color = (0, 119, 190, 150)
                 else:
-                    color = (100, 100, 100)
-                pygame.draw.rect(self.screen, color, rect)
-                pygame.draw.rect(self.screen, (50, 50, 80), rect, 1)
+                    color = (100, 100, 100, 200)
 
-        # preview current ship under mouse (and show validity)
+                cell_surface = pygame.Surface(
+                    (self._cell_size, self._cell_size), pygame.SRCALPHA
+                )
+                cell_surface.fill(color)
+                self._screen.blit(cell_surface, (x, y))
+                pygame.draw.rect(self._screen, (255, 255, 255, 100), rect, 1)
+
+        # Draw placed ships with their images
+        self._draw_placed_ships()
+
+        # Preview current ship under mouse (and show validity)
         mx, my = pygame.mouse.get_pos()
         preview = None
         if not self.all_ships_placed():
             preview = self._compute_preview(mx, my)
         if preview:
             preview_rects, valid = preview
-            color = (50, 200, 50) if valid else (200, 50, 50)
+            color = (50, 255, 50, 150) if valid else (255, 50, 50, 150)
             for rx, ry in preview_rects:
-                rect = pygame.Rect(rx, ry, self.cell_size, self.cell_size)
-                pygame.draw.rect(self.screen, color, rect, 3)
+                rect = pygame.Rect(rx, ry, self._cell_size, self._cell_size)
+                preview_surface = pygame.Surface(
+                    (self._cell_size, self._cell_size), pygame.SRCALPHA
+                )
+                preview_surface.fill(color)
+                self._screen.blit(preview_surface, (rx, ry))
+                border_color = (50, 255, 50) if valid else (255, 50, 50)
+                pygame.draw.rect(self._screen, border_color, rect, 3, border_radius=5)
 
-        # UI texts
-        info_font = pygame.font.Font(None, 24)
+        # Current ship info box
+        info_box = pygame.Rect(
+            self._offset_x,
+            self._offset_y + self._board_size * self._cell_size + 30,
+            600,
+            80,
+        )
+        info_surface = pygame.Surface((600, 80), pygame.SRCALPHA)
+        info_surface.fill((0, 0, 0, 200))
+        self._screen.blit(info_surface, (info_box.x, info_box.y))
+        pygame.draw.rect(self._screen, (255, 215, 0), info_box, 3, border_radius=8)
+
+        # Ship info text
+        info_font = pygame.font.Font(None, 32)
         if self.all_ships_placed():
-            info = info_font.render("All ships placed", True, (255, 255, 255))
+            info_text = "Todos os navios posicionados!"
+            info_color = (100, 255, 100)
         else:
-            name, size = self.ships_to_place[self.current_index]
-            info = info_font.render(
-                f"Current: {name} (size {size}) - {'H' if self.horizontal else 'V'}",
-                True,
-                (255, 255, 255),
-            )
-        self.screen.blit(
-            info, (self.offset_x, self.offset_y + self.board_size * self.cell_size + 10)
-        )
+            ship = self._ships_to_place[self._current_index]
+            orientation = "Horizontal" if self._horizontal else "Vertical"
+            info_text = f"Navio: {ship.name} ({ship.size} celulas) - {orientation}"
+            info_color = (255, 255, 255)
 
-        msg = info_font.render(self.message, True, (255, 200, 200))
-        self.screen.blit(
-            msg, (self.offset_x, self.offset_y + self.board_size * self.cell_size + 40)
-        )
+        info = info_font.render(info_text, True, info_color)
+        self._screen.blit(info, (info_box.x + 20, info_box.y + 15))
 
-        # buttons
-        for key, rect in self.buttons.items():
-            pygame.draw.rect(self.screen, (200, 50, 50), rect, border_radius=6)
-            txt = info_font.render(key.capitalize(), True, (255, 255, 255))
-            self.screen.blit(txt, (rect.x + 20, rect.y + 10))
+        # Message
+        msg_font = pygame.font.Font(None, 26)
+        msg = msg_font.render(self._message, True, (255, 200, 100))
+        self._screen.blit(msg, (info_box.x + 20, info_box.y + 50))
 
-        # Start button enabled only if all ships placed
-        if len(self.player.board.ships) == len(self.ships_to_place):
-            pygame.draw.rect(
-                self.screen, (50, 200, 50), self.buttons["start"], border_radius=6
-            )
-            txt = info_font.render("Start", True, (0, 0, 0))
-            self.screen.blit(
-                txt, (self.buttons["start"].x + 20, self.buttons["start"].y + 10)
-            )
+        # Draw buttons with hover effect
+        button_font = pygame.font.Font(None, 36)
+        mouse_pos = pygame.mouse.get_pos()
+
+        for button in self._buttons:
+            # Check if button should be enabled
+            enabled = True
+            if button.get("enabled_check"):
+                enabled = len(self._player.board.ships) == len(self._ships_to_place)
+
+            rect = button["rect"]
+
+            if not enabled:
+                color = (60, 60, 60)
+            elif rect.collidepoint(mouse_pos) and enabled:
+                color = button["hover_color"]
+                # Shadow on hover
+                shadow_rect = rect.copy()
+                shadow_rect.x += 3
+                shadow_rect.y += 3
+                pygame.draw.rect(
+                    self._screen, (0, 0, 0, 128), shadow_rect, border_radius=8
+                )
+            else:
+                color = button["color"]
+
+            pygame.draw.rect(self._screen, color, rect, border_radius=8)
+            pygame.draw.rect(self._screen, (255, 255, 255), rect, 3, border_radius=8)
+
+            text_surf = button_font.render(button["text"], True, (255, 255, 255))
+            text_rect = text_surf.get_rect(center=rect.center)
+            self._screen.blit(text_surf, text_rect)
+
+        # Instructions box
+        inst_box = pygame.Rect(self._width - 340, 500, 320, 120)
+        inst_surface = pygame.Surface((320, 120), pygame.SRCALPHA)
+        inst_surface.fill((0, 0, 0, 200))
+        self._screen.blit(inst_surface, (inst_box.x, inst_box.y))
+        pygame.draw.rect(self._screen, (100, 150, 255), inst_box, 2, border_radius=8)
+
+        inst_font = pygame.font.Font(None, 22)
+        instructions = [
+            "Instrucoes:",
+            "- Clique no tabuleiro para",
+            "  posicionar o navio",
+            "- Tecla R: Rotacionar",
+            "- Clique direito: Rotacionar",
+        ]
+
+        y_offset = inst_box.y + 10
+        for line in instructions:
+            inst_text = inst_font.render(line, True, (255, 255, 255))
+            self._screen.blit(inst_text, (inst_box.x + 15, y_offset))
+            y_offset += 22
 
         pygame.display.flip()
+
+    def _draw_placed_ships(self):
+        """Desenha navios posicionados com suas imagens"""
+        for ship in self._player.board.ships:
+            # Sort positions by visual order
+            # For horizontal ships: sort by column (left to right)
+            # For vertical ships: sort by row (top to bottom)
+            if ship.horizontal:
+                sorted_positions = sorted(ship.positions, key=lambda p: p[1])
+            else:
+                sorted_positions = sorted(ship.positions, key=lambda p: p[0])
+
+            # Draw each segment with corresponding image index
+            for i, pos in enumerate(sorted_positions):
+                row, col = pos
+                x = self._offset_x + col * self._cell_size
+                y = self._offset_y + row * self._cell_size
+
+                # Get ship image for this segment (i is the correct index)
+                img = ship.get_image(i, self._cell_size)
+                if img:
+                    self._screen.blit(img, (x, y))
 
     def _compute_preview(self, mx, my):
         # if mouse over board, compute rectangle positions for preview
         if not (
-            self.offset_x <= mx < self.offset_x + self.board_size * self.cell_size
-            and self.offset_y <= my < self.offset_y + self.board_size * self.cell_size
+            self._offset_x <= mx < self._offset_x + self._board_size * self._cell_size
+            and self._offset_y
+            <= my
+            < self._offset_y + self._board_size * self._cell_size
         ):
             return None
         if self.all_ships_placed():
             return None
-        col = (mx - self.offset_x) // self.cell_size
-        row = (my - self.offset_y) // self.cell_size
-        name, size = self.ships_to_place[self.current_index]
+        col = (mx - self._offset_x) // self._cell_size
+        row = (my - self._offset_y) // self._cell_size
+        ship = self._ships_to_place[self._current_index]
         rects = []
         positions = []
-        for i in range(size):
-            if self.horizontal:
+        for i in range(ship.size):
+            if self._horizontal:
                 r = row
                 c = col + i
             else:
                 r = row + i
                 c = col
             # compute top-left pixel
-            rx = self.offset_x + c * self.cell_size
-            ry = self.offset_y + r * self.cell_size
+            rx = self._offset_x + c * self._cell_size
+            ry = self._offset_y + r * self._cell_size
             rects.append((rx, ry))
             positions.append((r, c))
 
         # validity check: ensure all positions are inside board and unoccupied
         valid = True
         for r, c in positions:
-            if r < 0 or c < 0 or r >= self.board_size or c >= self.board_size:
+            if r < 0 or c < 0 or r >= self._board_size or c >= self._board_size:
                 valid = False
                 break
-            if self.player.board.grid[r][c] != "~":
+            if self._player.board.grid[r][c] != "~":
                 valid = False
                 break
 
         return (rects, valid)
 
     def all_ships_placed(self):
-        """Return True when all ships have been placed (either via manual
-        placement or randomize)."""
-        return self.current_index >= len(self.ships_to_place) or len(
-            self.player.board.ships
-        ) >= len(self.ships_to_place)
+        """Retorna True quando todos os navios foram posicionados (seja via
+        posicionamento manual ou aleatorização)."""
+        return self._current_index >= len(self._ships_to_place) or len(
+            self._player.board.ships
+        ) >= len(self._ships_to_place)
 
     def check_click(self, pos):
         x, y = pos
         # buttons
-        for key, rect in self.buttons.items():
-            if rect.collidepoint(pos):
-                if key == "randomize":
+        for button in self._buttons:
+            if button["rect"].collidepoint(pos):
+                # Play click sound
+                if self._click_sound:
+                    self._click_sound.play()
+
+                action = button.get("action")
+
+                if action == "randomize":
                     # reset and auto-place
-                    self.player.board = self.player.board.__class__()
-                    self.player.place_ships()
+                    self._player.board = self._player.board.__class__()
+                    self._player.place_ships()
+
+                    # Play put sound for randomization
+                    if self._put_sound:
+                        self._put_sound.play()
+
                     # mark all as placed
-                    self.current_index = len(self.ships_to_place)
-                    self.message = "Ships randomly placed"
+                    self._current_index = len(self._ships_to_place)
+                    self._message = "Navios posicionados aleatoriamente"
                     return None
-                if key == "start":
-                    if len(self.player.board.ships) == len(self.ships_to_place):
+
+                if action == "start":
+                    if len(self._player.board.ships) == len(self._ships_to_place):
                         # Store player in MainController for PlayScreen to use
-                        return ("play", self.player)
+                        return ("play", self._player)
                     else:
-                        self.message = "Coloque todos os navios antes de iniciar"
+                        self._message = "Coloque todos os navios antes de iniciar"
                         return None
-                if key == "back":
+
+                if action == "back":
                     return "home"
 
         # click on board: try to place
         if (
-            self.offset_x <= x < self.offset_x + self.board_size * self.cell_size
-            and self.offset_y <= y < self.offset_y + self.board_size * self.cell_size
+            self._offset_x <= x < self._offset_x + self._board_size * self._cell_size
+            and self._offset_y
+            <= y
+            < self._offset_y + self._board_size * self._cell_size
         ):
             if self.all_ships_placed():
-                self.message = "All ships already placed"
+                self._message = "Todos os navios já foram posicionados"
                 return None
 
-            col = (x - self.offset_x) // self.cell_size
-            row = (y - self.offset_y) // self.cell_size
-            name, size = self.ships_to_place[self.current_index]
+            col = (x - self._offset_x) // self._cell_size
+            row = (y - self._offset_y) // self._cell_size
+            ship = self._ships_to_place[self._current_index]
 
-            # Create ship and try to add it
-            ship = Ship(name, size)
+            # Try to add the ship
             try:
-                self.player.board.add_ship(ship, row, col, horizontal=self.horizontal)
+                self._player.board.add_ship(ship, row, col, horizontal=self._horizontal)
+
+                # Play put sound when ship is successfully placed
+                if self._put_sound:
+                    self._put_sound.play()
+
                 # Only increment if successfully added
-                self.current_index += 1
-                if self.current_index >= len(self.ships_to_place):
-                    self.message = "All ships placed"
+                self._current_index += 1
+                if self._current_index >= len(self._ships_to_place):
+                    self._message = "Todos os navios posicionados"
                 else:
-                    self.message = "Ship placed. Click to place the next one"
+                    self._message = (
+                        "Navio posicionado. Clique para posicionar o próximo"
+                    )
             except ValueError as e:
                 # Ship was not added, don't increment index
-                self.message = f"Invalid position: {e}"
+                self._message = f"Posição inválida: {e}"
             return None
 
         return None
 
-    def update(self):
-        # handle orientation toggle via keyboard (with debouncing to avoid rapid toggles)
-        pressed = pygame.key.get_pressed()
-        if pressed[pygame.K_r]:
-            if not self.r_key_pressed:
-                self.horizontal = not self.horizontal
-                self.r_key_pressed = True
-        else:
-            self.r_key_pressed = False
-
     def handle_event(self, event):
-        """Handle mouse events from controller. Returns a screen name if navigation is requested."""
+        """Trata eventos do mouse do controller. Retorna um nome de tela se navegação for solicitada."""
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 3:  # right-click toggles orientation
                 current_time = pygame.time.get_ticks()
-                if current_time - self.last_toggle_time > self.toggle_cooldown:
-                    self.horizontal = not self.horizontal
-                    self.last_toggle_time = current_time
-                    orientation = "Horizontal" if self.horizontal else "Vertical"
-                    self.message = f"Orientação: {orientation}"
+                if current_time - self._last_toggle_time > self._toggle_cooldown:
+                    self._horizontal = not self._horizontal
+                    self._last_toggle_time = current_time
+                    orientation = "Horizontal" if self._horizontal else "Vertical"
+                    self._message = f"Orientação: {orientation}"
                 return None
             if event.button == 1:  # left click -> delegate to check_click
                 return self.check_click(event.pos)
