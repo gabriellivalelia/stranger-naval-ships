@@ -319,13 +319,6 @@ class LoginScreen(BaseScreen):
             self._show_message("Preencha usuário e senha!", (255, 100, 100))
             return None
 
-        # Check if MongoDB is available
-        if not self._ranking_controller.mongo:
-            self._show_message(
-                "MongoDB não configurado. Use o modo offline.", (255, 200, 100)
-            )
-            return None
-
         # Try to authenticate
         success, message = self._ranking_controller.authenticate_user(
             self._username_input, self._password_input
@@ -361,13 +354,6 @@ class LoginScreen(BaseScreen):
         if len(self._password_input) > 20:
             self._show_message(
                 "Senha deve ter no máximo 20 caracteres!", (255, 100, 100)
-            )
-            return None
-
-        # Check if MongoDB is available
-        if not self._ranking_controller.mongo:
-            self._show_message(
-                "MongoDB não configurado. Use o modo offline.", (255, 200, 100)
             )
             return None
 
